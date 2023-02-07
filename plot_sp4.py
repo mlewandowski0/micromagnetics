@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-with open("sp4.dat") as f:
+with open("sp4_euler.dat") as f:
     Mx, My, Mz, t = [], [], [], []
     for line in f:
         v = line.strip().split(" ")
@@ -11,7 +11,7 @@ with open("sp4.dat") as f:
 
 plt.plot(t, My, label="My", color="green")
 plt.legend()
-plt.savefig("My.png")
+plt.savefig("sp4_euler.png")
 plt.show()
 
 plt.plot(t, Mx, label="Mx", color="red")
