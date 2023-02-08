@@ -42,7 +42,7 @@ k2_coeff       = [1./5.]
 k3_coeff       = [3./40., 9./40.]
 k4_coeff       = [44./45.     ,   -56./15.     , 32./9.]
 k5_coeff       = [19372./6561.,   -25360./2187., 64448./6561.,-212./729.]
-k6_coeff       = [9017./3168. ,   -355/33      , 46732./5247., 49./176. ,  -5103./18656.]
+k6_coeff       = [9017./3168. ,   -355./33.    , 46732./5247., 49./176. ,  -5103./18656.]
 k7_coeff       = [35./384.    ,	 0.            , 500./1113.  , 125./192.,  -2187/6784,     11/84]
 z__n_p_1_coeff = [5179./57600.,  0.     	   , 7571./16695.  , 393./640.	, -92097./339200., 187./2100., 1./40.]
 
@@ -65,16 +65,20 @@ def ode45(m, tol=0.0001, h_zee=0.0):
                  k6_coeff[3] * h * k4 + k6_coeff[4] * h * k5, h_zee=h_zee)
   
   y__n_p_1 = m + k7_coeff[0] * h * k1 + k7_coeff[1] * h * k2 + k7_coeff[2] * h * k3 + k7_coeff[3] * h * k4 + k7_coeff[4] * h * k5 + k7_coeff[5] * h * k6
+  
+  # something funny here 
+
   k7 = dm_dt(y__n_p_1, h_zee=h_zee)
   
-  z__n_p_1 = m + z__n_p_1_coeff[0] * k1 + z__n_p_1_coeff[1] * k2 + z__n_p_1_coeff[2] * k3 + z__n_p_1_coeff[3] * k4 + \
-                 z__n_p_1_coeff[4] * k5 + z__n_p_1_coeff[5] * k6 + z__n_p_1_coeff[6] * k7
-    
-
+  z__n_p_1 = m + z__n_p_1_coeff[0] * k1 * h + z__n_p_1_coeff[1] * k2 * h + z__n_p_1_coeff[2] * k3 * h + z__n_p_1_coeff[3] * k4 * h + \
+                 z__n_p_1_coeff[4] * k5 * h + z__n_p_1_coeff[5] * k6 * h + z__n_p_1_coeff[6] * k7 * h
+  
   tau__n_p_1 = z__n_p_1 - y__n_p_1 
 
   # Root Mean Squared Error 
   avg_numerical_error = sqrt(np.sum(tau__n_p_1**2) / np.prod(tau__n_p_1.shape)) 
+
+  # print(avg_numerical_error)
 
   dt = 0.9 * dt * min(
                       max( 
@@ -160,16 +164,25 @@ A     = 1.3e-11
 alpha = 0.02
 solver = ode45
 output_filename = f"sp4_{solver.__name__}_adaptive"
+calculate_demag_tensor = False
+demag_tensor_file = "demag_tensor.npy"
 
 relaxation_time = 1e-9
 simulation_time = 1e-9
 tol = 0.0001
 
-print("A")
 # setup demag tensor
-n_demag = np.zeros([2*i-1 for i in n] + [6])
-for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):
-  set_n_demag(i, t[1:], t[0])
+if calculate_demag_tensor:
+  print("Calculating the demagnetization tensor")
+  n_demag = np.zeros([2*i-1 for i in n] + [6])
+  for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):
+    set_n_demag(i, t[1:], t[0])
+
+  print(n_demag.shape)
+  np.save(demag_tensor_file, n_demag)
+else:
+  print(f"loading the demagnetization tensor from {demag_tensor_file}")
+  n_demag = np.load(demag_tensor_file)
 
 print("B")
 starting_time = time()
@@ -188,7 +201,7 @@ print(f"[{format_time(starting_time)}] starting relaxation")
 cum_time = 0.
 dreport = relaxation_time / 10.
 report = 0
-dt = 1e-13
+dt = 1e-15
 
 while cum_time <= relaxation_time:
   if cum_time >= report:
@@ -200,7 +213,7 @@ while cum_time <= relaxation_time:
 
 # switch
 alpha = 0.02
-dt    = 5e-15
+dt    = 2e-12
 h_zee = np.tile([-24.6e-3/mu0, +4.3e-3/mu0, 0.0], np.prod(n)).reshape(m.shape)
 
 sim_time = 1e-9
@@ -219,7 +232,7 @@ with open(f'{output_filename}.dat', 'w') as f:
         report += dreport
 
     mx, my, mz = tuple(map(lambda i: np.mean(m[:,:,:,i]), range(3)))
-    f.write("%f %f %f %f %f\n" % ((i*1e9*dt,mx,my, mz, dt)))
+    f.write("%f %f %f %f %f\n" % ((cum_time,mx,my, mz, dt)))
 
     ts.append(cum_time)
     mxs.append(mx)
