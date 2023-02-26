@@ -1,4 +1,6 @@
-import matplotlib.pyplot as plt 
+# standard problems https://www.ctcms.nist.gov/~rdm/mumag.org.html
+
+import matplotlib.pyplot as plt
 import numpy as np
 from solvers import *
 from math import asinh, atan, sqrt, pi
@@ -138,6 +140,7 @@ def h_eff(m):
   f_h_demag_pad[:,:,:,2] = (f_n_demag[:,:,:,(2, 4, 5)]*f_m_pad).sum(axis = 3)
 
   h_demag = np.fft.ifftn(f_h_demag_pad, axes = list(filter(lambda i: n[i] > 1, range(3))))[:n[0],:n[1],:n[2],:].real
+  B_demag = ms*h_demag
 
   # exchange field
   h_ex = - 2 * m * sum([1/x**2 for x in dx])
@@ -149,27 +152,101 @@ def h_eff(m):
     else:
         repeats = [i//3*2] + [1]*(n[i%3]-2) + [2-i//3*2]
     v = np.repeat(m, repeats, axis = i%3) / dx[i%3]**2
-
     h_ex += v
+  B_exch = 2*A/(mu0*ms)*h_ex
 
-  return ms*h_demag + 2*A/(mu0*ms)*h_ex
+  B_dm = np.zeros_like(m)
+  mx = m[:, :, :, 0]
+  my = m[:, :, :, 1]
+  mz = m[:, :, :, 2]
+  delta_x, delta_y, delta_z = dx[0], dx[1], dx[2]
+
+  # calculate derivatives using central difference
+  dmz_dx = np.zeros_like(mz)
+  dmz_dx[1:-1, :, :] = (mz[2:, :, :] - mz[:-2, :, :]) / (2 * delta_x)
+  # apply boundary conditions
+  #                 mz here ? or mx
+  dmz_dx[0,  :, :] = mz[0,  :, :] + Dind / (2 * A) * mx[0,  :, :] * delta_x
+  dmz_dx[-1, :, :] = mz[-1, :, :] + Dind / (2 * A) * mx[-1, :, :] * delta_x
+
+  dmz_dy = np.zeros_like(mz)
+  dmz_dy[:, 1:-1, :] = (mz[:, 2:, :] - mz[:, :-2, :]) / (2 * delta_y)
+  # apply boundary conditions
+  #                 mz here ? or my
+  dmz_dy[:,  0, :] = mz[:, 0, :] + Dind / (2 * A) * my[:, 0, :] * delta_y
+  dmz_dy[:, -1, :] = mz[:, -1, :] + Dind / (2 * A) * my[:, -1, :] * delta_y
+
+  dmx_dx = np.zeros_like(mx)
+  dmx_dx[1:-1, :, :] = (mx[2:, :, :] - mx[:-2, :, :]) / (2 * delta_x)
+  # apply boundary conditions
+  dmx_dx[0,:,:] = mx[0,:,:] -  Dind / (2 * A) * mz[0,:,:] * delta_x
+  dmx_dx[-1,:,:] = mx[-1,:,:] -  Dind / (2 * A) * mz[-1,:,:] * delta_x
+
+  dmy_dy = np.zeros_like(my)
+  dmy_dy[:, 1:-1, :] = (my[:, 2:, :] - my[:, :-2, :]) / (2 * delta_y)
+  # apply boundary conditions
+  dmy_dy[:,0,:]  = my[:,0,:] -  Dind / (2 * A) * mz[:,0,:] * delta_y
+  dmy_dy[:,-1,:] = my[:,-1,:] -  Dind / (2 * A) * mz[:,-1,:] * delta_y
+
+  B_dm[:,:,:,0] = dmz_dx
+  B_dm[:, :, :, 1] = dmz_dy
+  B_dm[:, :, :, 2] = -dmx_dx - dmy_dy
+  B_dm = 2 * Dind / ms * B_dm
+
+  # Magneto-crystalline anisotropy
+  u_dot_m = np.sum(m * AnisU.reshape(1,1,1,3), axis=-1)
+  magnetocrystalline_1st_term = 2 * Ku1 / BSat * u_dot_m
+  shape = magnetocrystalline_1st_term.shape
+  magnetocrystalline_1st_term = magnetocrystalline_1st_term.reshape(shape[0], shape[1], shape[2], 1)
+  magnetocrystalline_1st_term = magnetocrystalline_1st_term * AnisU.reshape(1,1,1,3)
+
+  magnetocrystalline_2nd_term = 4 * Ku2 / BSat * np.power(u_dot_m, 3)
+  shape = magnetocrystalline_2nd_term.shape
+  magnetocrystalline_2nd_term = magnetocrystalline_2nd_term.reshape(shape[0], shape[1], shape[2], 1)
+  magnetocrystalline_2nd_term = magnetocrystalline_2nd_term * AnisU.reshape(1, 1, 1, 3)
+
+  B_anis = magnetocrystalline_1st_term + magnetocrystalline_2nd_term
+
+  #print(np.abs(B_demag).sum(), np.abs(B_exch).sum(),np.abs(B_dm).sum(), np.abs(B_anis).sum())
+
+  return B_demag + B_exch + B_dm + B_anis
 
 # setup mesh and material constants
 n     = (100, 25, 1)
 dx    = (5e-9, 5e-9, 3e-9)
 mu0   = 4e-7 * pi
 gamma = 2.211e5
+
+# Msat
 ms    = 8e5
+
 A     = 1.3e-11
 alpha = 0.02
+# DMI coefficient
+Dind  = 3.0e-3
+
+#
+BSat = ms
+MSat = ms
+
 solver = ode23
-output_filename = f"sp4_{solver.__name__}_adaptive"
+output_filename = f"sp4_{solver.__name__}_adaptive_extra_physics"
 calculate_demag_tensor = False
 demag_tensor_file = "demag_tensor.npy"
 
 relaxation_time = 1e-9
 simulation_time = 1e-9
 tol = 0.0001
+AnisU = [0,0,1]
+
+AnisU = np.array(AnisU)
+AnisU = AnisU / np.sqrt(AnisU.T @ AnisU)
+
+_Ku1 = 717e3
+_Ku2 = 0
+
+Ku1 = np.ones(n) * _Ku1
+Ku2 = np.ones(n) * _Ku2
 
 # setup demag tensor
 if calculate_demag_tensor:

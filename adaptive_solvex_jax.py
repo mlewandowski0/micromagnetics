@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt 
-import numpy as np
-from solvers import *
+import jax
 from math import asinh, atan, sqrt, pi
 from time import time
 
@@ -8,7 +7,7 @@ from time import time
 def dm_dt(m, h_zee = 0.):
     global h_eff, gamma, alpha
     h = h_eff(m) + h_zee
-    dmdt = - gamma/(1+alpha**2) * np.cross(m, h) - alpha*gamma/(1+alpha**2) * np.cross(m, np.cross(m, h))
+    dmdt = - gamma/(1+alpha**2) * jax.numpy.cross(m, h) - alpha*gamma/(1+alpha**2) * jax.numpy.cross(m, jax.numpy.cross(m, h))
     return dmdt
 
 # integrate using Bogacki-Shampine method ( but adaptive step size)
@@ -26,7 +25,7 @@ def ode23(m, tol=0.0001, h_zee=0.0):
   tau__n_p_1 = z__n_p_1 - y__n_p_1 
 
   # Root Mean Squared Error 
-  avg_numerical_error = sqrt(np.sum(tau__n_p_1**2) / np.prod(tau__n_p_1.shape)) 
+  avg_numerical_error = sqrt(jax.sum(tau__n_p_1**2) / jax.prod(tau__n_p_1.shape)) 
 
   dt = 0.9 * dt * min(
                       max( 
@@ -76,7 +75,7 @@ def ode45(m, tol=0.0001, h_zee=0.0):
   tau__n_p_1 = z__n_p_1 - y__n_p_1 
 
   # Root Mean Squared Error 
-  avg_numerical_error = sqrt(np.sum(tau__n_p_1**2) / np.prod(tau__n_p_1.shape)) 
+  avg_numerical_error = sqrt(jax.sum(tau__n_p_1**2) / jax.prod(tau__n_p_1.shape)) 
 
   # print(avg_numerical_error)
 
@@ -87,6 +86,7 @@ def ode45(m, tol=0.0001, h_zee=0.0):
                          ), 
                       2)  
   return z__n_p_1
+
 
 # a very small number
 eps = 1e-18
@@ -117,17 +117,16 @@ def g(p):
 
 # demag tensor setup
 def set_n_demag(c, permute, func):
-  it = np.nditer(n_demag[:,:,:,c], flags=['multi_index'], op_flags=['writeonly'])
+  it = jax.nditer(n_demag[:,:,:,c], flags=['multi_index'], op_flags=['writeonly'])
   while not it.finished:
     value = 0.0
-    for i in np.rollaxis(np.indices((2,)*6), 0, 7).reshape(64, 6):
+    for i in jax.rollaxis(jax.indices((2,)*6), 0, 7).reshape(64, 6):
       idx = list(map(lambda k: (it.multi_index[k] + n[k] - 1) % (2*n[k] - 1) - n[k] + 1, range(3)))
       value += (-1)**sum(i) * func(list(map(lambda j: (idx[j] + i[j] - i[j+3]) * dx[j], permute)))
     it[0] = - value / (4 * pi * np.prod(dx))
     it.iternext()
 
 # compute effective field (demag + exchange)
-# TODO : DMI + Anistropy + STT
 def h_eff(m):
   # demag field
   m_pad[:n[0],:n[1],:n[2],:] = m
@@ -162,7 +161,7 @@ gamma = 2.211e5
 ms    = 8e5
 A     = 1.3e-11
 alpha = 0.02
-solver = ode23
+solver = ode45
 output_filename = f"sp4_{solver.__name__}_adaptive"
 calculate_demag_tensor = False
 demag_tensor_file = "demag_tensor.npy"
