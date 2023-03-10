@@ -115,7 +115,7 @@ sim_time = 1e-9
 steps = sim_time / dt
 
 # starting simulation
-with open('sp4.dat', 'w') as f:
+with open('data/sp4.dat', 'w') as f:
   for i in range(int(1e-9/dt)):
     if i % (steps // 10) == 0:
         print(f"[{format_time(starting_time)}] simulation time t= {i * dt}")

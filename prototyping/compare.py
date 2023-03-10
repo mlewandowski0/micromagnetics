@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 
-v1 = open("sp4_ode23_adaptive.dat")
-v2 = open("sp4_ode23_adaptive_extra_physics.dat")
+v1 = open("data/sp4_ode23_adaptive.dat")
+v2 = open("data/sp4_ode23_adaptive_extra_physics.dat")
 
 v1_data = v1.readlines()
 v2_data = v2.readlines()
