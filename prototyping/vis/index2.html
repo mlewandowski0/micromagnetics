@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vector Field Visualization with Three.js</title>
+    <style>
+      body {
+        margin: 0;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="OrbitControls.js"></script>
+
+    <script>
+      let W = window.innerWidth;
+      let H = window.innerHeight;
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+      });
+      document.body.appendChild(renderer.domElement);
+
+      const scene = new THREE.Scene();
+
+      const camera = new THREE.PerspectiveCamera(28, 1, 1, 1000);
+      camera.position.set(30, 30, 50);
+      camera.lookAt(scene.position);
+      scene.add(camera);
+
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(0, 0, -1);
+      camera.add(light);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      function createArrow(vector, position, color, len) {
+        const group = new THREE.Group();
+        const arrowMat = new THREE.MeshLambertMaterial({ color: color });
+
+        const arrowGeo = new THREE.ConeBufferGeometry(2 * len, 5 * len, 32);
+        const arrowMesh = new THREE.Mesh(arrowGeo, arrowMat);
+        arrowMesh.rotation.x = Math.PI / 2;
+        arrowMesh.position.z = 2.5 * len;
+        const cylinderGeo = new THREE.CylinderBufferGeometry(
+          1 * len,
+          1 * len,
+          5 * len,
+          32
+        );
+        const cylinderMesh = new THREE.Mesh(cylinderGeo, arrowMat);
+        cylinderMesh.rotation.x = Math.PI / 2;
+        cylinderMesh.position.z = -2.5 * len;
+
+        group.lookAt(vector);
+        group.position.x = position.x;
+        group.position.y = position.y;
+        group.position.z = position.z;
+
+        // return group;
+        scene.add(group);
+        group.add(arrowMesh);
+        group.add(cylinderMesh);
+      }
+
+      function render() {
+        renderer.render(scene, camera);
+      }
+
+      function resize() {
+        W = window.innerWidth;
+        H = window.innerHeight;
+        renderer.setSize(W, H);
+        camera.aspect = W / H;
+        camera.updateProjectionMatrix();
+        render();
+      }
+
+      window.addEventListener("resize", resize);
+
+      resize();
+
+      let rad = 0;
+
+      function animate() {
+        rad += 0.05;
+        //group.lookAt(Math.sin(rad) * 100, Math.cos(rad) * 100, 100);
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      }
+      let pol = -1;
+      let charge = -1;
+
+      let r = 0;
+      let R = 1;
+      let theta = 0;
+      let dr = 0.2;
+      let dtheta = 10;
+      let eps = 1e-9;
+      while (r <= R) {
+        let w = 8 * dr;
+        let w2 = w * w;
+
+        theta = 0;
+        while (theta < 360) {
+          let x = r * Math.cos((theta * Math.PI) / 180) * r;
+          let y = r * Math.sin((theta * Math.PI) / 180) * r;
+          let r2 = x * x + y * y;
+
+          // pol =1 , charge = 1
+          let mz = 2 * pol * (Math.exp(-r2 / w2) - 0.5);
+          let mx = (x * charge / (r + eps)) * (1 - Math.abs(mz));
+          let my = (y  * charge / (r + eps)) * (1 - Math.abs(mz));
+
+          let v = new THREE.Vector3(mx, my, mz);
+
+          if (mz > 0) color = Math.round(Math.abs(mz) * 255) << 16;
+          else color = Math.round(Math.abs(mz) * 255);
+
+          color = color + (Math.round(Math.sqrt(mx * mx + my * my) * 255) << 8);
+          console.log(Math.round(Math.sqrt(mx * mx + my * my) * 255));
+
+          createArrow(v, new THREE.Vector3(x * 5, y * 5, 0), color, 0.05);
+
+          theta += dtheta;
+        }
+        r += dr;
+        dr = 0.82 * dr;
+      }
+
+      requestAnimationFrame(animate);
+    </script>
+  </body>
+</html>

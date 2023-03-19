@@ -66,12 +66,14 @@ def ode45(m, tol=0.0001, h_zee=0.0):
   k6 = dm_dt(m + k6_coeff[0] * h * k1 + k6_coeff[1] * h * k2 + k6_coeff[2] * h * k3 + 
                  k6_coeff[3] * h * k4 + k6_coeff[4] * h * k5, h_zee=h_zee)
   
+  # Error order O(n^5), RK4
   y__n_p_1 = m + k7_coeff[0] * h * k1 + k7_coeff[1] * h * k2 + k7_coeff[2] * h * k3 + k7_coeff[3] * h * k4 + k7_coeff[4] * h * k5 + k7_coeff[5] * h * k6
   
   # something funny here 
 
   k7 = dm_dt(y__n_p_1, h_zee=h_zee)
   
+  # Error order O(n^6), RK5
   z__n_p_1 = m + z__n_p_1_coeff[0] * k1 * h + z__n_p_1_coeff[1] * k2 * h + z__n_p_1_coeff[2] * k3 * h + z__n_p_1_coeff[3] * k4 * h + \
                  z__n_p_1_coeff[4] * k5 * h + z__n_p_1_coeff[5] * k6 * h + z__n_p_1_coeff[6] * k7 * h
   

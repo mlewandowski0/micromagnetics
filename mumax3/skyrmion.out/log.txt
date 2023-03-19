@@ -1,0 +1,36 @@
+//mumax 3.10 [linux_amd64 go1.18.1(gc) CUDA-11.5]
+//GPU info: NVIDIA GeForce GTX 1650(3912MB), CUDA Driver 11.6, cc=7.5, using cc=75 PTX
+//(c) Arne Vansteenkiste, Dynamat LAB, Ghent University, Belgium
+//This is free software without any warranty. See license.txt
+//********************************************************************//
+//  If you use mumax in any work or publication,                      //
+//  we kindly ask you to cite the references in references.bib        //
+//********************************************************************//
+//output directory: skyrmion.out/
+setgridsize(64, 64, 1)
+setcellsize(1e-9, 1e-9, 1e-9)
+setpbc(0, 0, 0)
+//resizing...
+Msat = 580e3
+Aex = 15e-12
+Dind = 3.0e-3
+Ku1 = 0.8e6
+AnisU = vector(0, 0, 1)
+alpha = 0.1
+m = neelskyrmion(-1, 1).transl(0, 0, 0)
+minimize()
+saveas(m, "img.ovf")
+Pol = 0.4
+xi = 0.2
+j = vector(0, 0, 0)
+autosave(m, 4e-10)
+tableAutosave(1e-11)
+tableAdd(ext_bubblepos)
+run(1e-9)
+//********************************************************************//
+//Please cite the following references, relevant for your simulation. //
+//See bibtex file in output folder for justification.                 //
+//********************************************************************//
+//   * Vansteenkiste et al., AIP Adv. 4, 107133 (2014).
+//   * Exl et al., J. Appl. Phys. 115, 17D118 (2014).
+//   * Mulkers et al., Phys. Rev. B 95, 144401 (2017).

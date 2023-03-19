@@ -1,0 +1,24 @@
+setgridsize(64,64,1)
+setcellsize(1e-9,1e-9,1e-9) 
+setpbc(0,0,0)
+
+Msat = 580e3
+Aex = 15e-12
+Dind = 3.0e-3
+Ku1 = 0.8e6
+AnisU = vector(0,0,1)
+alpha = 0.1
+
+m = neelskyrmion(-1, 1).transl(0,0,0)
+minimize()
+
+saveas(m, "img.ovf")
+
+Pol = 0.4
+xi = 0.2
+j = vector(0,0,0) // A/m2
+
+autosave(m,4e-10)
+tableAutosave(1e-11)
+tableAdd(ext_bubblepos)
+run(1e-9)
