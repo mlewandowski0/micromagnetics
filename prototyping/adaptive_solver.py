@@ -165,7 +165,7 @@ alpha = 0.02
 solver = ode23
 output_filename = f"sp4_{solver.__name__}_adaptive"
 calculate_demag_tensor = False
-demag_tensor_file = "demag_tensor.npy"
+demag_tensor_file = "demag_tensor_gpu.npy"
 
 relaxation_time = 1e-9
 simulation_time = 1e-9
@@ -184,6 +184,7 @@ else:
   print(f"loading the demagnetization tensor from {demag_tensor_file}")
   n_demag = np.load(demag_tensor_file)
 
+print(n_demag.shape)
 print("B")
 starting_time = time()
 m_pad     = np.zeros([2*i-1 for i in n] + [3])
