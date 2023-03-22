@@ -3,8 +3,15 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from solvers import *
-from math import asinh, atan, sqrt, pi
+from math import asinh, atan, sqrt, pi, ceil
 from time import time
+import numba.cuda as cuda
+import numba as nb
+import numpy as np
+from math import asinh, sqrt, atan
+from time import time
+from math import pi
+
 
 # f function (change of magnetiation with respect to time)
 def dm_dt(m, h_zee = 0.):
@@ -97,18 +104,21 @@ def format_time(starting_time):
     v = round(time() - starting_time, 3)
     return f"{v//3600}h {(v % 3600)//60}m {round(v % 60, 3)}s"
 
+
+PI = pi
 # newell f
-def f(p):
-  #print(type(p))
-  x, y, z = abs(p[0]), abs(p[1]), abs(p[2])
+@cuda.jit
+def f_cuda(p0, p1, p2):
+  x, y, z = abs(p0), abs(p1), abs(p2)
   return + y / 2.0 * (z**2 - x**2) * asinh(y / (sqrt(x**2 + z**2) + eps)) \
          + z / 2.0 * (y**2 - x**2) * asinh(z / (sqrt(x**2 + y**2) + eps)) \
          - x*y*z * atan(y*z / (x * sqrt(x**2 + y**2 + z**2) + eps))       \
          + 1.0 / 6.0 * (2*x**2 - y**2 - z**2) * sqrt(x**2 + y**2 + z**2)
 
 # newell g
-def g(p):
-  x, y, z = p[0], p[1], abs(p[2])
+@cuda.jit
+def g_cuda(p0, p1, p2):
+  x, y, z = p0, p1, abs(p2)
   return + x*y*z * asinh(z / (sqrt(x**2 + y**2) + eps))                         \
          + y / 6.0 * (3.0 * z**2 - y**2) * asinh(x / (sqrt(y**2 + z**2) + eps)) \
          + x / 6.0 * (3.0 * z**2 - x**2) * asinh(y / (sqrt(x**2 + z**2) + eps)) \
@@ -117,19 +127,75 @@ def g(p):
          - z * x**2 / 2.0 * atan(y*z / (x * sqrt(x**2 + y**2 + z**2) + eps))    \
          - x*y * sqrt(x**2 + y**2 + z**2) / 3.0
 
+@cuda.jit
+def demag_calc_gpu(array, idxes, n, permute, dx, _func, idx_table):
+    x_idx, y_idx, z_idx = cuda.grid(3)
+    if x_idx < array.shape[0] and y_idx < array.shape[1] and z_idx < array.shape[2]:
+        idx = idx_table[x_idx, y_idx, z_idx,:]
+        value = 0
+        i = 0
+        while i < 64:
+            idx[0] = (x_idx + n[0] - 1) % (2*n[0] - 1) - n[0] + 1
+            idx[1] = (y_idx + n[1] - 1) % (2*n[1] - 1) - n[1] + 1
+            idx[2] = (z_idx + n[2] - 1) % (2*n[2] - 1) - n[2] + 1
+
+
+            x = (idx[permute[0]] + idxes[i][permute[0]] - idxes[i][permute[0]+3]) * dx[permute[0]]
+            y = (idx[permute[1]] + idxes[i][permute[1]] - idxes[i][permute[1]+3]) * dx[permute[1]]
+            z = (idx[permute[2]] + idxes[i][permute[2]] - idxes[i][permute[2]+3]) * dx[permute[2]]
+
+            sign = (-1)**(idxes[i][0] + idxes[i][1] + idxes[i][2] + idxes[i][3] + idxes[i][4] + idxes[i][5])
+            v = 0
+            if _func[0] == 0:
+                value += sign * f_cuda(x,y,z)
+            else:
+                value += sign * g_cuda(x,y,z)
+
+            i += 1
+        div = 4 * PI * dx[0] * dx[1] * dx[2]
+        array[x_idx,y_idx,z_idx] = - value / div
+
 # demag tensor setup
-def set_n_demag(c, permute, func):
-  it = np.nditer(n_demag[:,:,:,c], flags=['multi_index'], op_flags=['writeonly'])
-  while not it.finished:
-    value = 0.0
-    for i in np.rollaxis(np.indices((2,)*6), 0, 7).reshape(64, 6):
-      idx = list(map(lambda k: (it.multi_index[k] + n[k] - 1) % (2*n[k] - 1) - n[k] + 1, range(3)))
-      value += (-1)**sum(i) * func(list(map(lambda j: (idx[j] + i[j] - i[j+3]) * dx[j], permute)))
-    it[0] = - value / (4 * pi * np.prod(dx))
-    it.iternext()
+def set_n_demag_cuda(permute, func, dx):
+    threadsperblock = (32, 8, 1)
+    an_array = np.zeros(( 2*n[0]-1, 2*n[1] - 1, 2 * n[2]-1), dtype=np.float64)
+    arr_cuda = cuda.to_device(an_array)
+    n_cuda = cuda.to_device(np.array(n, dtype=int))
+    permute_cuda = cuda.to_device(np.array(permute, dtype=int))
+    dx_cuda = cuda.to_device(np.array(dx, dtype=np.float64))
+    idxes = np.rollaxis(np.indices((2,)*6), 0, 7).reshape(64, 6)
+    idxes_cuda = cuda.to_device(idxes)
+    idx_cuda = np.zeros(an_array.shape + (3, ))
+    idx_cuda = cuda.to_device(idx_cuda)
+
+    if func == 'f':
+        #print(0)
+        _func = np.array([0])
+    else:
+        #print(1)
+        _func = np.array([1])
+
+    _func = cuda.to_device(_func)
+    blockspergrid_x = ceil(an_array.shape[0] / threadsperblock[0])
+    blockspergrid_y = ceil(an_array.shape[1] / threadsperblock[1])
+    blockspergrid_z = ceil(an_array.shape[2] / threadsperblock[2])
+    blockspergrid = (blockspergrid_x, blockspergrid_y, blockspergrid_z)
+
+    demag_calc_gpu[blockspergrid, threadsperblock](arr_cuda, idxes_cuda, n_cuda, permute_cuda, dx_cuda, _func, idx_cuda)
+    return arr_cuda
+
+def calculate_demag_tensor_cuda(n, dx):
+    print("Calculating the demagnetization tensor")
+    n_demag = np.zeros([2*i-1 for i in n] + [6])
+    res = []
+
+    for i, t in enumerate((('f',0,1,2),('g',0,1,2),('g',0,2,1),('f',1,2,0),('g',1,2,0),('f',2,0,1))):
+        r = set_n_demag_cuda(func=t[0], permute=t[1:], dx=dx).copy_to_host()
+        res.append(np.expand_dims(r, 3))
+    return np.concatenate(res, axis=3)
+
 
 # compute effective field (demag + exchange)
-# TODO : DMI + Anistropy + STT
 def h_eff(m):
   # demag field
   m_pad[:n[0],:n[1],:n[2],:] = m
@@ -248,20 +314,14 @@ _Ku2 = 0
 Ku1 = np.ones(n) * _Ku1
 Ku2 = np.ones(n) * _Ku2
 
-# setup demag tensor
-if calculate_demag_tensor:
-  print("Calculating the demagnetization tensor")
-  n_demag = np.zeros([2*i-1 for i in n] + [6])
-  for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):
-    set_n_demag(i, t[1:], t[0])
+print(f"geometry : {np.prod(n)} cells")
 
-  print(n_demag.shape)
-  np.save(demag_tensor_file, n_demag)
-else:
-  print(f"loading the demagnetization tensor from {demag_tensor_file}")
-  n_demag = np.load(demag_tensor_file)
+# calculate (fast!) demag
+before_demag = time()
+n_demag = calculate_demag_tensor_cuda(n, dx)
+print(f"Finished calculating demagnetization tensor in {round(time() - before_demag, 4)}s")
+print(f"size of demag densor {np.prod(n_demag.shape)}")
 
-print("B")
 starting_time = time()
 m_pad     = np.zeros([2*i-1 for i in n] + [3])
 f_n_demag = np.fft.fftn(n_demag, axes = list(filter(lambda i: n[i] > 1, range(3))))
