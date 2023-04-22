@@ -3,6 +3,7 @@ import numpy as np
 from solvers import *
 from math import asinh, atan, sqrt, pi
 from time import time
+import os
 
 # f function (change of magnetiation with respect to time)
 def dm_dt(m, h_zee = 0.):
@@ -34,7 +35,7 @@ def ode23(m, tol=0.0001, h_zee=0.0):
                             0.3
                          ), 
                       2)  
-  return z__n_p_1
+  return y__n_p_1 
 
 
 # coefficients for Dormand-Prince method
@@ -86,7 +87,7 @@ def ode45(m, tol=0.0001, h_zee=0.0):
                             0.3
                          ), 
                       2)  
-  return z__n_p_1
+  return y__n_p_1
 
 # a very small number
 eps = 1e-18
@@ -169,7 +170,7 @@ demag_tensor_file = "demag_tensor_gpu.npy"
 
 relaxation_time = 1e-9
 simulation_time = 1e-9
-tol = 0.0001
+tol = 0.00001
 
 # setup demag tensor
 if calculate_demag_tensor:
@@ -244,6 +245,8 @@ with open(f'data/{output_filename}.dat', 'w') as f:
     # solver method
     m = solver(m, tol=tol, h_zee=h_zee)
 
+print(f"[{format_time(starting_time)}] simulation time t= {cum_time}, current stepsize = {dt}")
+np.save(os.path.join("eval_data", "as_last_rk23_2.npy"), m)
 plt.plot(ts, mxs, label="Mx", color="red")
 plt.plot(ts, mys, label="My", color="green")
 plt.plot(ts, mzs, label="Mz", color="blue")

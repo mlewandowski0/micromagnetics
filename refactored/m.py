@@ -31,7 +31,6 @@ simulation_time = 1e-9
 sim.relax_for(relaxation_time)
 
 # switch
-# switch
 sim.alpha = 0.02
 sim.h_zee = np.tile([-24.6e-3/sim.mu0, +4.3e-3/sim.mu0, 0.0], np.prod(sim.n)).reshape(sim.m.shape)
 sim_time = 1e-9

@@ -12,7 +12,6 @@ from math import asinh, atan, sqrt, pi
 eps = 1e-18
 n     = (100, 25, 1)
 dx    = (5e-9, 5e-9, 3e-9)
-demag_tensor_file = "demag_tensor.npy"
 
 # newell f
 def f(p):
@@ -58,7 +57,7 @@ def set_n_demag_test(c, permute, func, n_demag, dx):
     it.iternext()
 
 
-def calculate_demag_tensor(n, dx):
+def calculate_demag_tensor(n, dx, demag_tensor_file = "demag_tensor.npy"):
     print("Calculating the demagnetization tensor")
     n_demag = np.zeros([2*i-1 for i in n] + [6])
     for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):
@@ -68,7 +67,7 @@ def calculate_demag_tensor(n, dx):
     np.save(demag_tensor_file, n_demag)
 
 
-def calculate_demag_tensor_test(n, dx):
+def calculate_demag_tensor_test(n, dx, demag_tensor_file = "demag_tensor.npy"):
     print("Calculating the demagnetization tensor")
     n_demag = np.zeros([2*i-1 for i in n] + [6])
     for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):

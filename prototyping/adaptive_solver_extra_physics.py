@@ -162,8 +162,10 @@ def h_eff(m):
   delta_x, delta_y, delta_z = dx[0], dx[1], dx[2]
 
   # calculate derivatives using central difference
+  mz = m[:, :, :, 2]
   dmz_dx = np.zeros_like(mz)
   dmz_dx[1:-1, :, :] = (mz[2:, :, :] - mz[:-2, :, :]) / (2 * delta_x)
+  
   # apply boundary conditions
   #                 mz here ? or mx
   dmz_dx[0,  :, :] = mz[0,  :, :] + Dind / (2 * A) * mx[0,  :, :] * delta_x

@@ -1,6 +1,7 @@
 import numpy as np
 from math import asinh, atan, sqrt, pi
 from time import time
+import matplotlib.pyplot as plt
 
 # setup mesh and material constants
 n     = (100, 25, 1)
@@ -84,12 +85,13 @@ def llg(m, dt, h_zee = 0.0):
   return  m/np.repeat(np.sqrt((m*m).sum(axis=3)), 3).reshape(m.shape)
 
 # setup demag tensor
+before_ndemag = time()
 n_demag = np.zeros([2*i-1 for i in n] + [6])
 for i, t in enumerate(((f,0,1,2),(g,0,1,2),(g,0,2,1),(f,1,2,0),(g,1,2,0),(f,2,0,1))):
   set_n_demag(i, t[1:], t[0])
+print(f"calculation of demag took : {time() - before_ndemag}")
 
 starting_time = time()
-
 m_pad     = np.zeros([2*i-1 for i in n] + [3])
 f_n_demag = np.fft.fftn(n_demag, axes = list(filter(lambda i: n[i] > 1, range(3))))
 
@@ -106,6 +108,8 @@ for i in range(5000):
     print(f"[{format_time(starting_time)}] relaxation step {i}")
   llg(m, 2e-13)
 
+np.save("data/s_state_original_code.npy", m)
+
 # switch
 alpha = 0.02
 dt    = 5e-15
@@ -114,11 +118,28 @@ h_zee = np.tile([-24.6e-3/mu0, +4.3e-3/mu0, 0.0], np.prod(n)).reshape(m.shape)
 sim_time = 1e-9
 steps = sim_time / dt
 
+ts, mxs, mys, mzs = [], [], [], []
 # starting simulation
-with open('data/sp4.dat', 'w') as f:
+with open('data/sp4_original.dat', 'w') as f:
   for i in range(int(1e-9/dt)):
     if i % (steps // 10) == 0:
         print(f"[{format_time(starting_time)}] simulation time t= {i * dt}")
-
-    f.write("%f %f %f %f\n" % ((i*1e9*dt,) + tuple(map(lambda i: np.mean(m[:,:,:,i]), range(3)))))
+ 
+    mx, my, mz = tuple(map(lambda i: np.mean(m[:,:,:,i]), range(3)))
+    _time = i*1e9*dt
+    f.write("%f %f %f %f %f\n" % ((_time,mx,my, mz, dt)))
     llg(m, dt, h_zee)
+    ts.append(_time)
+    mxs.append(mx)
+    mys.append(my)
+    mzs.append(mz)
+
+print(f"Whole simulation took {format_time(starting_time)}")  
+np.save("data/sp4_after_sim.npy", m)
+
+plt.plot(ts, mxs, label="Mx", color="red")
+plt.plot(ts, mys, label="My", color="green")
+plt.plot(ts, mzs, label="Mz", color="blue")
+plt.legend()
+plt.savefig(f"images/M_orignal_code.png")
+plt.show()
